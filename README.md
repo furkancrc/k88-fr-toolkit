@@ -28,8 +28,17 @@ multiplateforme.
 
 ## Statut
 
-🚧 Projet tout juste démarré — protocole non documenté, rien n'est encore
-fonctionnel. Voir [`docs/protocol.md`](docs/protocol.md) pour l'avancement.
+✅ **Couleur RGB globale fonctionnelle.** Premier morceau du protocole cassé :
+on peut changer la couleur unie de l'ensemble du clavier depuis Python.
+
+```bash
+python -m k88fr.led 255 0 0   # rouge
+python -m k88fr.led 0 0 255   # bleu
+```
+
+🚧 Reste à faire : mode "touche par touche" (couleur individuelle) et
+animations prédéfinies. Voir [`docs/protocol.md`](docs/protocol.md) pour le
+détail du protocole et les pistes en cours.
 
 ## Installation (dev)
 
