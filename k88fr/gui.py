@@ -1,5 +1,11 @@
-"""Interface graphique du K88-FR : aperçu immédiat et sauvegarde durable."""
+"""Interface graphique du K88-FR : aperçu immédiat et sauvegarde durable.
 
+La fenêtre se referme dans la zone de notification plutôt que de quitter :
+l'application reste accessible sans encombrer la barre des tâches.
+"""
+
+import os
+import sys
 import threading
 import tkinter
 import tkinter.colorchooser
@@ -11,6 +17,10 @@ from k88fr.config import load_color, save_color as remember_color
 from k88fr.led import K88FR, KeyboardNotFoundError
 
 customtkinter.set_appearance_mode("dark")
+
+ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+ICON_ICO = os.path.join(ASSETS, "icon.ico")
+ICON_TRAY = os.path.join(ASSETS, "tray.png")
 
 BG = "#15161A"
 CARD = "#1E2027"
@@ -61,6 +71,10 @@ class App(customtkinter.CTk):
 
         self._rgb = load_color() or (0, 255, 0)
         self._pending = None
+        self._tray = None
+
+        self._apply_window_icon()
+        self.protocol("WM_DELETE_WINDOW", self.hide_to_tray)
 
         self._build_header()
         self._build_preview()
@@ -209,6 +223,70 @@ class App(customtkinter.CTk):
             command=lambda: self.set_color("#000000"),
         ).grid(row=0, column=2)
 
+    # ------------------------------------------------- icône & zone de notif
+
+    def _apply_window_icon(self) -> None:
+        """Icône de la fenêtre et de la barre des tâches."""
+        if sys.platform == "win32":
+            # sans cet identifiant, Windows attribue à la fenêtre l'icône de
+            # l'interpréteur Python plutôt que la nôtre
+            try:
+                import ctypes
+
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                    "k88fr.toolkit.rgb"
+                )
+            except Exception:
+                pass
+        if os.path.exists(ICON_ICO):
+            try:
+                self.iconbitmap(ICON_ICO)
+            except Exception:
+                pass
+
+    def start_tray(self) -> None:
+        """Lance l'icône de la zone de notification, dans son propre fil."""
+        try:
+            import pystray
+            from PIL import Image
+        except ImportError:
+            return  # sans pystray, la fenêtre se ferme normalement
+
+        if not os.path.exists(ICON_TRAY):
+            return
+
+        menu = pystray.Menu(
+            pystray.MenuItem("Ouvrir", self._tray_show, default=True),
+            pystray.MenuItem("Éteindre le clavier",
+                             lambda *_: self.after(0, lambda: self.set_color("#000000"))),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Quitter", self._tray_quit),
+        )
+        self._tray = pystray.Icon(
+            "k88fr", Image.open(ICON_TRAY), "K88-FR — Contrôle RGB", menu
+        )
+        threading.Thread(target=self._tray.run, daemon=True).start()
+
+    def _tray_show(self, *_) -> None:
+        self.after(0, self.show_window)
+
+    def _tray_quit(self, *_) -> None:
+        if self._tray:
+            self._tray.stop()
+        self.after(0, self.destroy)
+
+    def hide_to_tray(self) -> None:
+        """Fermer la fenêtre la range dans la zone de notification."""
+        if self._tray is None:
+            self.destroy()
+            return
+        self.withdraw()
+
+    def show_window(self) -> None:
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
     # ------------------------------------------------------------- mécanique
 
     def _check_keyboard(self) -> None:
@@ -295,7 +373,9 @@ class App(customtkinter.CTk):
 
 
 def main() -> None:
-    App().mainloop()
+    app = App()
+    app.start_tray()
+    app.mainloop()
 
 
 if __name__ == "__main__":

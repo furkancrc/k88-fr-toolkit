@@ -1,5 +1,9 @@
 # k88-fr-toolkit
 
+<p align="center">
+  <img src="assets/logo.png" width="150" alt="k88-fr-toolkit">
+</p>
+
 Reprendre le contrôle du clavier mécanique **AmazonBasics K88-FR** — n'importe
 quelle couleur, écrite dans la mémoire du clavier, sans le logiciel d'origine.
 
@@ -39,6 +43,11 @@ python -m k88fr.led rouge
 ```bash
 python -m k88fr.gui
 ```
+
+Fermer la fenêtre range l'application dans la **zone de notification**, près
+de l'horloge : elle reste accessible sans encombrer la barre des tâches. Un
+clic sur l'icône la rouvre ; le menu contextuel permet d'éteindre le clavier
+ou de quitter.
 
 Toute couleur est acceptée : `RRGGBB`, `#RRGGBB`, ou un nom (`rouge`, `vert`,
 `bleu`, `blanc`, `jaune`, `cyan`, `magenta`, `orange`, `off`).
