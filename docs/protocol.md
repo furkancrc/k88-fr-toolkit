@@ -226,10 +226,53 @@ couleur.
   invisibles pour une indexation des `call rel32`. Le désassemblage linéaire
   de `.text` se désynchronise également (données entrelacées).
 
-**Prochaine étape pour cette voie** : charger le binaire dans Ghidra (analyse
-des vtables et décompilation), poser un point d'arrêt sur l'écriture du
-rapport `0x3f` et remonter à la routine qui produit les 2 octets. Les
-adresses ci-dessus donnent un point de départ direct.
+### Décompilation Ghidra — ce qu'elle a donné
+
+Ghidra 12 analyse ce binaire en ~150 s (`analyzeHeadless`, scripts en Java :
+Jython a été retiré). Résultats utiles :
+
+**Le style de checksum du développeur est identifié** : une somme 16 bits
+amorcée par une constante magique. Exemple certain, `FUN_004022f8` :
+
+```c
+somme = 0x5678;                    // amorce
+for (i = 0; i < 0x30; i++)         // 48 octets
+    somme = somme + octet[i];      // somme 16 bits
+```
+
+Vérifié exactement sur `config/lightSyncData.bin` (50 octets = 48 de données
++ 2 de checksum) : `0x5678 + somme(48 octets) = 0x64ef`, et le fichier se
+termine bien par `ef 64` (petit-boutiste). Le contrôle correspondant est
+visible dans `FUN_0040248c` : taille du fichier comparée à `0x32`, puis
+checksum recalculé et comparé.
+
+Il existe quatre variantes génériques `(tampon, longueur)` avec des amorces
+différentes — vraisemblablement une par modèle de clavier :
+`FUN_004378a8` (amorce `0x8032`), `FUN_0043d39c`, `FUN_00447a5c`,
+`FUN_004509e0`.
+
+**Mais le checksum du rapport `0x3f` n'est pas une simple somme d'octets** :
+rouge, vert et bleu ont exactement les mêmes octets (un `0xff`, deux `0x00`)
+et donc la même somme, alors que leurs checksums diffèrent. La routine du
+chemin périphérique dépend donc de la position, et n'a pas encore été
+localisée : la remontée s'arrête sur la répartition virtuelle C++, et les
+deux fonctions contenant à la fois `0x45` et `0x3f` se sont révélées être
+des identifiants de ressources de traduction, pas de rapports.
+
+Sondage complémentaire au banc d'essai (`k88fr/tools/probe_weights.py`) : en
+modifiant un octet couvert de `+1`, aucun delta simple du checksum
+(`±1`, `±256`, `±2`, `±512`…) n'est accepté. Ce n'est donc pas non plus une
+somme pondérée à petits coefficients.
+
+**Prochaines étapes concrètes** :
+
+1. Localiser la fonction d'envoi de rapport HID du chemin K88 (chercher les
+   appels indirects via vtable dans Ghidra plutôt que les `call rel32`), puis
+   remonter à ce qui remplit le tampon du rapport `0x3f`.
+2. Ou : décompiler systématiquement les fonctions appelant les quatre
+   variantes de somme ci-dessus, pour trouver celle du chemin périphérique.
+3. Piste à tester : une somme sur des **mots de 16 bits** (et non des
+   octets) serait sensible à la position et expliquerait les mesures.
 
 Piste annexe explorée sans succès : les fichiers de profil `config/*.K88`
 se terminent par 2 octets variables (`7385`, `c285`, …), mais ils
