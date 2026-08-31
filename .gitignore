@@ -4,3 +4,8 @@ __pycache__/
 *.pcapng
 *.pcap
 .vscode/
+
+# Artefacts de build PyInstaller
+build/
+dist/
+*.spec
