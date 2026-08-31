@@ -277,6 +277,28 @@ somme pondérée à petits coefficients.
    possibles entre nos trois couleurs sont donc figés à `0`, `±0xFE01`…,
    alors que les écarts mesurés valent `0x7ecf` et `0x875d`.
 
+### Preuve que la fonction dépend de la position
+
+Vérification faite octet par octet sur les trois captures (et pas seulement
+supposée) : dans la zone protégée, les messages rouge / vert / bleu sont
+**strictement identiques hors des trois octets RGB**, et leur somme d'octets
+est la même (452) — pour trois checksums différents.
+
+```
+rouge  00 01 00 01 01 03 ff 00 00 00 00 00 01 00 00 00 03 3a 81  -> c4f6
+vert   00 01 00 01 01 03 00 ff 00 00 00 00 01 00 00 00 03 3a 81  -> 4627
+bleu   00 01 00 01 01 03 00 00 ff 00 00 00 01 00 00 00 03 3a 81  -> beca
+```
+
+Toute fonction insensible à l'ordre des octets est donc exclue, ce qui
+condamne définitivement la famille des sommes — y compris celles trouvées
+dans le binaire.
+
+Indice supplémentaire tiré des écarts : rouge→vert et vert→bleu sont
+**impairs**, rouge→bleu est **pair**. Les couleurs compressées type RGB565
+sont donc aussi exclues (leurs contributions sont paires), et cette parité
+suggère une rotation dans la fonction.
+
 ### Contraintes établies sur la fonction (pour cadrer la recherche)
 
 En posant `f(r,g,b)` le checksum et en supposant une forme
