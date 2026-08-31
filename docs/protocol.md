@@ -318,6 +318,23 @@ Récapitulatif des familles **exclues par la mesure** :
 | Fletcher, Adler, BSD, SysV | testés sur le message exact |
 | Rotation + addition/XOR/soustraction | balayage complet (15 rotations × 3 opérations × sens × amorces) |
 | Somme pondérée à petits coefficients | sondage matériel : aucun delta simple accepté |
+| Rotation + opération, **toutes fenêtres du message** | 25 344 schémas testés (16 rotations × 2 sens × 2 ordres × 3 opérations × toutes les découpes) |
+| Contribution par octet = transformation simple de sa valeur | les écarts mesurés n'apparaissent dans aucune table de différences (rotations, décalages, multiples, puissances) |
+
+Astuce utile pour la suite : ces schémas sont **inversibles**, donc inutile de
+forcer l'amorce sur 65536 valeurs. On remonte le calcul à l'envers depuis le
+checksum connu du rouge pour la déduire, puis on vérifie sur le vert et le
+bleu — chaque hypothèse ne coûte alors que trois évaluations
+(`scratchpad/solve_invert.py`).
+
+### Limite de fond
+
+**Trois mesures ne suffisent pas à déterminer une fonction 16 bits.** On peut
+éliminer des familles (et beaucoup l'ont été), mais pas retrouver la bonne par
+énumération : l'espace des fonctions possibles est immense et les mesures ne
+le contraignent presque pas. Il faut donc soit **la routine elle-même**
+(débogueur posé sur l'écriture du rapport `0x3f`, qui donne la fonction par la
+pile d'appels), soit **beaucoup plus d'échantillons**.
 
 La fonction combine donc nécessairement des opérations de mélange
 (décalages, rotations, table), et reste à localiser dans le binaire. Le
