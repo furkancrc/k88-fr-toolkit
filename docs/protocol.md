@@ -62,8 +62,11 @@ valeur  0x14  00 00 01 01 03 R  G  B  00 00 00 01 00 00 00 03 <?>   <?>
 
 - offset 0 : Report ID (0x14)
 - offset 6-8 : composantes **R, G, B** (0-255 chacune) de la couleur unie
-- offset 5 : `0x03` — probablement le "mode" (0x03 = couleur statique ?
-  à vérifier avec les modes animés)
+- offset 5 : `0x03` par défaut — hypothèse "mode d'effet" **infirmée** :
+  changer cette valeur (testé 0-15, cf. `k88fr/tools/try_modes.py`) n'a
+  déclenché aucun changement visible. Soit ce n'est pas un sélecteur de
+  mode, soit changer un mode nécessite aussi de toucher un autre Report ID
+  en parallèle (non identifié).
 - offsets 17-18 (`0x3a 0x81` observés) : inchangés lors de nos tests,
   rôle non confirmé (checksum ? marqueur fixe ?) — laissés tels quels
   (on relit le report existant et on ne modifie que R/G/B, jamais ces
@@ -102,13 +105,26 @@ identifier comment adresser une LED individuelle.
 ## Méthode de travail qui a fonctionné
 
 1. `k88fr/list_devices.py` pour repérer VID/PID et les différentes collections.
-2. `k88fr/dump_report_descriptor.py` + `k88fr/parse_hid_descriptor.py` pour
-   lister tous les Report IDs valides et leur taille — bien plus fiable que
-   deviner depuis une capture Wireshark incomplète.
-3. `k88fr/read_features.py` pour lire l'état actuel de chaque Report Feature
-   et repérer par inspection visuelle des motifs connus (ex: `00 ff 00` pour
-   du vert, la couleur affichée au moment du test).
-4. Modifier un seul champ à la fois et comparer avant/après (`k88fr/led.py`
+2. `k88fr/tools/dump_report_descriptor.py` + `k88fr/tools/parse_hid_descriptor.py`
+   pour lister tous les Report IDs valides et leur taille — bien plus fiable
+   que deviner depuis une capture Wireshark incomplète.
+3. `k88fr/tools/read_features.py` pour lire l'état actuel de chaque Report
+   Feature et repérer par inspection visuelle des motifs connus (ex:
+   `00 ff 00` pour du vert, la couleur affichée au moment du test).
+4. `k88fr/tools/analyze_report.py <report_id_hex> <taille>` pour un
+   histogramme rapide des valeurs d'un report (distingue un bitmask binaire
+   d'une vraie table de données variées).
+5. Modifier un seul champ à la fois et comparer avant/après (`k88fr/led.py`
    suit ce principe : on relit toujours l'état existant plutôt que
    d'écrire un buffer construit à la main, pour ne jamais casser les
    octets dont le rôle est encore inconnu).
+
+## Pistes explorées sans succès (pour ne pas les retester)
+
+- Faire varier l'octet offset 5 du Report 0x14 (hypothèse "mode d'effet") :
+  aucun effet visible testé sur les valeurs 0 à 15.
+- `k88fr/tools/replay.py` (rejeu de la séquence Report 9 capturée pendant un
+  clic sur le bouton couleur du logiciel officiel) : rejeu identique
+  byte-à-byte confirmé (comparaison Wireshark), mais aucun effet — le
+  logiciel officiel n'envoyait probablement rien d'utile à ce moment-là
+  (son onglet LED ne réagit pas non plus visuellement dans l'UI elle-même).
