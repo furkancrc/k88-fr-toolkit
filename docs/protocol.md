@@ -196,12 +196,45 @@ Familles d'algorithmes **écartées expérimentalement** :
   addition/XOR/soustraction, avant/après l'octet, 7 valeurs d'init, toutes
   sous-plages. Aucune correspondance.
 
-**Conclusion** : fonction propriétaire. La voie restante est l'analyse du
-binaire `AmazonBasics gaming software.exe` (32 bits, 2018) pour en extraire
-la routine de calcul. En attendant, seules les couleurs dont on possède une
-capture réelle peuvent être écrites de façon persistante (cf.
+**Conclusion** : fonction propriétaire. Seules les couleurs dont on possède
+une capture réelle peuvent être écrites de façon persistante (cf.
 `k88fr/presets.py`), tandis que l'aperçu volatile accepte n'importe quelle
 couleur.
+
+### Analyse du binaire — état des lieux
+
+`AmazonBasics gaming software.exe` (32 bits, 2018, 4,99 Mo) :
+
+- Construit avec **C++Builder** (décoration de symboles Borland `$qqr`),
+  avec les bibliothèques **JCL/JVCL** liées statiquement.
+- Fait rare et exploitable : il exporte **14 982 symboles nommés**, ce qui
+  donne les noms des fonctions de bibliothèque (mais pas celles du
+  développeur, non exportées).
+- `Jclmath@Crc16DefaultTable` est présente en `0x708f20` avec
+  `Crc16DefaultStart = 0xffff` : c'est un CRC-CCITT standard (polynôme
+  `0x1021`). Testé sur le message protégé, il ne correspond pas — cohérent
+  avec la non-linéarité mesurée. Cette table est du code de bibliothèque
+  non utilisé pour notre checksum.
+- Les pointeurs `Hid@HidD_SetFeature` (`0x8861cc`) et consorts sont bien
+  résolus dynamiquement en `0x4db7c8`, mais **jamais appelés** : seules des
+  écritures (init et nettoyage) référencent ces variables.
+- Les vraies E/S passent par `CreateFileA` / `DeviceIoControl` / `WriteFile`,
+  dont les enveloppes se situent vers `0x4dd700`–`0x4ded50`. Les appelants
+  applicatifs directs sont `0x4353b8`, `0x436018`, `0x436bfc`.
+- **Blocage** : la remontée du graphe d'appels s'arrête là, car la
+  répartition se fait par appels virtuels C++ (`call dword ptr [edx+0x20]`),
+  invisibles pour une indexation des `call rel32`. Le désassemblage linéaire
+  de `.text` se désynchronise également (données entrelacées).
+
+**Prochaine étape pour cette voie** : charger le binaire dans Ghidra (analyse
+des vtables et décompilation), poser un point d'arrêt sur l'écriture du
+rapport `0x3f` et remonter à la routine qui produit les 2 octets. Les
+adresses ci-dessus donnent un point de départ direct.
+
+Piste annexe explorée sans succès : les fichiers de profil `config/*.K88`
+se terminent par 2 octets variables (`7385`, `c285`, …), mais ils
+correspondent au champ interne visible en fin de message (`03 3a 81`), pas
+au checksum du rapport `0x3f`.
 
 ## Ancienne analyse (avant découverte du logiciel 2021)
 
