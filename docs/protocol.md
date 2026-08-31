@@ -119,6 +119,121 @@ identifier comment adresser une LED individuelle.
    d'écrire un buffer construit à la main, pour ne jamais casser les
    octets dont le rôle est encore inconnu).
 
+## Sauvegarde persistante (mémoire flash) — RÉSOLUE
+
+Le logiciel officiel **fonctionnel** se trouvait dans
+`C:\Users\furka\Documents\AmazonBasics gaming software\` (version 2021,
+`SW 2.0.0.22 / FW 0.08`), contrairement à celui de `Program Files` (2017)
+qui ne gère pas le K88. C'est lui qui a permis de capturer la vraie
+séquence de sauvegarde.
+
+### Séquence complète d'un « Appliquer »
+
+Deux blocs distincts, à ne pas confondre :
+
+**1. Changement visible (volatile)** — c'est ce que fait `k88fr/led.py` :
+```
+Report 9  : 09 21 00...00   (ouverture)
+Report 0x14 : 19 octets, RGB aux offsets 6,7,8
+Report 9  : 09 22 00...00   (fermeture)
+```
+
+**2. Sauvegarde en flash (persistante)** :
+```
+Report 9    : 09 02 00...00        (ouverture)
+Report 0x45 : 261 octets, RGB aux offsets 10,11,12   (fragment 1, en-tête 00 01 12)
+Report 0x45 : 261 octets, mêmes données              (fragment 2, en-tête 00 00 01)
+Report 9    : 09 07 00...00        (fermeture)
+Report 0x3f : 3 octets — 0x3f + checksum 16 bits
+```
+
+Important : chaque rapport doit être envoyé sur un **handle HID frais**
+(ouvrir/fermer le périphérique à chaque fois) avec ~150 ms de pause. En
+réutilisant un seul handle, les écritures échouent avec
+`ERROR_GEN_FAILURE (0x1F)`.
+
+### L'oracle de validation
+
+Après une écriture flash, le registre `0x14` reflète la couleur du profil
+stocké. Si le checksum est correct, il contient la couleur demandée ; s'il
+est faux, le firmware invalide le profil et `0x14` repasse au vert d'usine.
+**Cela permet de tester une hypothèse sans débrancher le clavier**
+(`k88fr/tools/test_checksum_candidates.py`).
+
+### Le checksum du Report 0x3f — non résolu
+
+Valeurs mesurées (version 2021) : rouge `c4f6`, vert `4627`, bleu `beca`.
+
+Zone couverte, déterminée expérimentalement en inversant un bit à chaque
+offset (`k88fr/tools/map_checksum_region.py`) : offsets **1, 2 et 6→22** du
+Report 0x45, soit 19 octets. Les offsets 3-5 (en-tête de fragment) et toute
+la traîne au-delà de 22 sont ignorés — cette traîne est de la mémoire de
+pile non initialisée du logiciel, elle diffère d'une capture à l'autre et
+n'a aucune importance.
+
+Message effectivement protégé (RGB aux indices 6, 7, 8) :
+```
+00 01 00 01 01 03 RR GG BB 00 00 00 01 00 00 00 03 3a 81
+```
+
+Familles d'algorithmes **écartées expérimentalement** :
+
+- **Tous les CRC (et tout schéma à base de XOR)** : test de linéarité au banc
+  d'essai. Si la fonction était linéaire sur GF(2), le blanc vaudrait
+  forcément `rouge ⊕ vert ⊕ bleu` = `3c1b`. Le firmware rejette cette
+  valeur → la fonction n'est pas linéaire, ce qui élimine toute la famille
+  d'un seul test.
+- **Recherche exhaustive CRC16** : 65536 polynômes × écart R→G libre
+  (1..400), en modes normal/réfléchi et octets inversés → 357 candidats,
+  réduits à 16 après contrainte de position, tous rejetés par le matériel.
+- **Somme pondérée mod 2¹⁶** : les poids résolus depuis les 3 mesures sont
+  incohérents (pas de progression régulière), ce qui exclut Fletcher et
+  apparentés.
+- **Algorithmes classiques** : Fletcher (mod 255/256), Adler, BSD, SysV,
+  sommes de mots (gros/petit-boutiste, complément à un), XOR de mots — sur
+  toutes les sous-plages contenant RGB. Aucune correspondance.
+- **Famille « rotation + opération »** : rotations 1..15 bits, gauche/droite,
+  addition/XOR/soustraction, avant/après l'octet, 7 valeurs d'init, toutes
+  sous-plages. Aucune correspondance.
+
+**Conclusion** : fonction propriétaire. La voie restante est l'analyse du
+binaire `AmazonBasics gaming software.exe` (32 bits, 2018) pour en extraire
+la routine de calcul. En attendant, seules les couleurs dont on possède une
+capture réelle peuvent être écrites de façon persistante (cf.
+`k88fr/presets.py`), tandis que l'aperçu volatile accepte n'importe quelle
+couleur.
+
+## Ancienne analyse (avant découverte du logiciel 2021)
+
+Le Report 0x14 (couleur globale) est **purement volatile** : la couleur
+revient au vert par défaut au moindre débranchement/rebranchement, sans
+même appuyer sur une touche. Pistes testées pour trouver un mécanisme de
+sauvegarde persistante :
+
+- Enveloppe `0x02`/`0x07` (au lieu de `0x21`/`0x22`) autour de l'écriture du
+  Report 0x14 : aucun effet (même pas de changement temporaire).
+- Recherche du motif `00 ff 00` (vert actuel) dans les gros buffers
+  `0x42`/`0x43` (2052 octets) : absent.
+- Ces buffers `0x42`/`0x43`/`0x44`/`0x45` sont en fait la **même donnée**
+  (0x44/0x45 sont un préfixe tronqué de 0x42/0x43) — probablement une
+  interface de lecture mémoire brute (firmware/bootloader) à taille de
+  fenêtre variable, sans rapport avec les profils LED. Contenu stable
+  entre plusieurs lectures (pas aléatoire), mais aucun motif RGB.
+- Lecture de `0x20`, `0x30`, `0x3f`, `0x40`, `0x41` (y compris en mode
+  édition ouvert via Report 9) : échec systématique avec
+  `ERROR_GEN_FAILURE (0x1F)` — vraie erreur matérielle Windows, pas un
+  souci de format de notre côté. Le firmware refuse ces accès pour une
+  raison non identifiée (report réservé ? nécessite un déverrouillage
+  préalable qu'on n'a pas trouvé ?).
+
+**Conclusion** : la sauvegarde persistante native n'a pas été trouvée avec
+les moyens à disposition (pas de documentation publique sur ce chipset
+Mosart précis, logiciel officiel trop cassé pour servir de référence).
+Le produit final utilise donc une **persistance logicielle** (réapplication
+automatique de la couleur au démarrage de Windows / rebranchement du
+clavier) plutôt qu'une vraie sauvegarde flash. À revisiter si on obtient
+un jour un dump de firmware ou une meilleure source sur ce chipset.
+
 ## Pistes explorées sans succès (pour ne pas les retester)
 
 - Faire varier l'octet offset 5 du Report 0x14 (hypothèse "mode d'effet") :

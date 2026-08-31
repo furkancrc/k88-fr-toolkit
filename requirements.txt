@@ -1,1 +1,2 @@
 hidapi>=0.14
+customtkinter>=5.2
