@@ -26,15 +26,29 @@ pip install -r requirements.txt
 
 ## Utilisation
 
+**Sauvegarder une couleur dans le clavier** (survit au débranchement, aucun
+logiciel n'a besoin de tourner ensuite) :
+
 ```bash
-python -m k88fr.led rouge
-python -m k88fr.led "#ff8800"
-python -m k88fr.led off
+python -m k88fr.persist "#ff8800"
 ```
 
-Couleurs nommées disponibles : `rouge`/`red`, `vert`/`green`, `bleu`/`blue`,
-`blanc`/`white`, `jaune`/`yellow`, `cyan`, `magenta`, `orange`,
-`off`/`eteint`. Sinon, hex `RRGGBB` ou `#RRGGBB`.
+**Changer la couleur sans la sauvegarder** (effet immédiat, perdu au
+débranchement) :
+
+```bash
+python -m k88fr.led rouge
+```
+
+**Interface graphique** :
+
+```bash
+python -m k88fr.gui
+```
+
+N'importe quelle couleur fonctionne : hex `RRGGBB` ou `#RRGGBB`, ou un nom
+connu (`rouge`/`red`, `vert`/`green`, `bleu`/`blue`, `blanc`/`white`,
+`jaune`/`yellow`, `cyan`, `magenta`, `orange`, `off`/`eteint`).
 
 ## Identifier le clavier
 
@@ -47,13 +61,19 @@ celui du K88-FR (VID `0x3938`, PID `0x1150`).
 
 ## Statut
 
-✅ **Couleur RGB globale** (mode "contrôle complet", couleur unie sur tout le
-clavier) — fonctionnelle et fiable.
+✅ **N'importe quelle couleur, sauvegardée dans le clavier.** Le profil écrit
+survit au débranchement et au redémarrage, sans qu'aucun programme reste actif.
 
-🚧 **Pas encore fait** : mode "touche par touche" (couleur individuelle) et
-animations prédéfinies. Plusieurs pistes explorées sans succès pour l'instant
-— voir [`docs/protocol.md`](docs/protocol.md) pour le détail et les prochaines
-pistes à tester.
+Le clavier vérifie que le profil qu'on lui dépose est cohérent avec lui-même :
+le rapport `0x45` porte à ses offsets 21-22 un champ de contrôle valant
+`0x8032 + somme des octets 6 à 20`. C'était le seul verrou — le rapport `0x3f`
+qu'envoie le logiciel d'origine est facultatif. Détail complet dans
+[`docs/protocol.md`](docs/protocol.md).
+
+🚧 **Pas encore fait** : couleur par touche et animations prédéfinies. La
+structure du profil est maintenant comprise, donc ces modes sont accessibles :
+les profils d'usine du clavier montrent qu'un octet de mode et un paramètre
+pilotent les animations.
 
 ## Structure du repo
 

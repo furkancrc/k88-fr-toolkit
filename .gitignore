@@ -9,3 +9,7 @@ __pycache__/
 build/
 dist/
 *.spec
+
+# etats de travail des outils
+k88fr/tools/_profils/
+k88fr/tools/_crack_state.json

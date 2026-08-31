@@ -160,7 +160,61 @@ est faux, le firmware invalide le profil et `0x14` repasse au vert d'usine.
 **Cela permet de tester une hypothèse sans débrancher le clavier**
 (`k88fr/tools/test_checksum_candidates.py`).
 
-### Le checksum du Report 0x3f — non résolu
+### RÉSOLU — le champ de contrôle interne (et le faux problème du 0x3f)
+
+**Le rapport `0x3f` est facultatif.** Il ne participe pas à la validation.
+Pendant longtemps j'ai cherché à calculer son contenu alors que le vrai verrou
+était ailleurs : le rapport `0x45` porte, à ses **offsets 21-22**, un champ de
+contrôle interne que le firmware vérifie.
+
+```
+champ = (0x8032 + somme des octets 6 à 20) mod 2^16, en petit-boutiste
+```
+
+`0x8032` est exactement la constante d'amorçage des routines de checksum
+trouvées dans le binaire du fabricant — la même famille « somme 16 bits +
+constante magique » que celle vérifiée sur `lightSyncData.bin`.
+
+En patchant la couleur sans recalculer ce champ, on produisait un profil
+incohérent, que le firmware rejetait **quelle que soit** la valeur du `0x3f` —
+d'où l'impression tenace que le blocage venait de ce checksum.
+
+Formule établie sur cinq échantillons indépendants : les profils d'usine 1 et
+2 lus directement dans le clavier (en basculant avec son bouton de profil), et
+les captures rouge / vert / bleu. Vérifiée ensuite au banc d'essai sur des
+couleurs jamais capturées (magenta, orange `#ff8800`), qui survivent au
+débranchement.
+
+Séquence minimale pour sauvegarder n'importe quelle couleur :
+
+```
+Report 9    : 09 02 00…00        ouverture
+Report 0x45 : profil, fragment 1 (en-tête 00 01 12)   couleur aux offsets 10-12
+Report 0x45 : profil, fragment 2 (en-tête 00 00 01)   champ interne aux 21-22
+Report 9    : 09 07 00…00        fermeture
+```
+
+Implémenté dans [`k88fr/profile.py`](../k88fr/profile.py) et
+[`k88fr/persist.py`](../k88fr/persist.py).
+
+### Comment le blocage a été levé
+
+Trois observations, dans l'ordre :
+
+1. Le profil déposé **survit** à un checksum refusé, et une sauvegarde validée
+   survit aux essais faux qui la suivent. On peut donc tester des lots entiers
+   de candidats avant de vérifier — la recherche par dichotomie devient
+   possible, avec un débranchement par tour.
+2. Sur un profil magenta bricolé, **les 65536 valeurs** de `0x3f` ont été
+   éliminées. Preuve que le refus ne venait pas de ce checksum.
+3. Les 5 profils d'usine, lus en basculant avec le bouton du clavier, ont
+   révélé que les deux derniers octets — que je croyais constants — suivent la
+   somme du contenu. C'était le champ manquant.
+
+Le point 3 n'a rien coûté et a tout débloqué : lire les profils que le clavier
+considère déjà comme valides valait mieux que deviner ce qu'il attendait.
+
+### Historique : la recherche du checksum 0x3f (fausse piste)
 
 Valeurs mesurées (version 2021) : rouge `c4f6`, vert `4627`, bleu `beca`.
 
