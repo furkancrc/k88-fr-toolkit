@@ -271,8 +271,38 @@ somme pondérée à petits coefficients.
    remonter à ce qui remplit le tampon du rapport `0x3f`.
 2. Ou : décompiler systématiquement les fonctions appelant les quatre
    variantes de somme ci-dessus, pour trouver celle du chemin périphérique.
-3. Piste à tester : une somme sur des **mots de 16 bits** (et non des
-   octets) serait sensible à la position et expliquerait les mesures.
+3. ~~Piste à tester : une somme sur des mots de 16 bits~~ — **écartée
+   analytiquement** : dans une somme de mots, un octet ne peut contribuer que
+   `0xFF` (octet de poids faible) ou `0xFF00` (poids fort). Les écarts
+   possibles entre nos trois couleurs sont donc figés à `0`, `±0xFE01`…,
+   alors que les écarts mesurés valent `0x7ecf` et `0x875d`.
+
+### Contraintes établies sur la fonction (pour cadrer la recherche)
+
+En posant `f(r,g,b)` le checksum et en supposant une forme
+`Z + w_R·r + w_G·g + w_B·b`, les trois mesures donnent
+`w_R - w_G = 45617` et `w_G - w_B = 7075` : des écarts larges et irréguliers,
+incompatibles avec toute pondération naturelle (progression régulière,
+indices, puissances de deux).
+
+Récapitulatif des familles **exclues par la mesure** :
+
+| Famille | Comment elle est écartée |
+|---|---|
+| CRC et tout schéma à base de XOR | non-linéarité vérifiée 3 fois au banc d'essai |
+| Somme d'octets, pondérée ou non | rouge/vert/bleu ont la même somme d'octets |
+| Somme de mots de 16 bits | écarts possibles figés, incompatibles avec la mesure |
+| Hachage multiplicatif `h·M + o` | contradiction de parité (`M·(M-1)` toujours pair) |
+| Fletcher, Adler, BSD, SysV | testés sur le message exact |
+| Rotation + addition/XOR/soustraction | balayage complet (15 rotations × 3 opérations × sens × amorces) |
+| Somme pondérée à petits coefficients | sondage matériel : aucun delta simple accepté |
+
+La fonction combine donc nécessairement des opérations de mélange
+(décalages, rotations, table), et reste à localiser dans le binaire. Le
+balayage des fonctions applicatives de moins de 400 octets contenant une
+boucle avec décalage/XOR a produit 22 candidates, toutes écartées : la
+routine est vraisemblablement soit plus grosse, soit intégrée directement
+dans une fonction plus large (code aligné).
 
 Piste annexe explorée sans succès : les fichiers de profil `config/*.K88`
 se terminent par 2 octets variables (`7385`, `c285`, …), mais ils
